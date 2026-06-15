@@ -1,0 +1,23 @@
+{
+  "facts": {
+    "favorite color": "blue",
+    "name": "Alex",
+    "height": "5 ft 10",
+    "roommate name": "Sam",
+    "favorite country": "Japan",
+    "nickname": "Champ",
+    "pet name": "Rex",
+    "pet": "a dog",
+    "favorite game": "Chrono Trigger"
+  },
+  "utterances": [
+    {
+      "ts": "2025-01-01T00:00:00Z",
+      "text": "my name is Alex"
+    },
+    {
+      "ts": "2025-01-01T00:00:05Z",
+      "text": "what is my name"
+    }
+  ]
+}
