@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# J.A.R.V.I.S — Python Dependencies
+# Refactored 2026-05-28 (dead deps removed, psutil + pygame added)
+# Install:  pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Core: assistant brain ─────────────────────────────────────────────────────
+PyQt6==6.9.1
+SpeechRecognition==3.14.3
+PyAudio==0.2.14
+edge-tts==7.2.8
+pygame==2.6.1            # MP3 playback via SDL2 (replaces broken playsound/MCI)
+pyttsx3==2.99            # offline TTS fallback (Windows SAPI)
+requests==2.32.4
+PyYAML==6.0.2            # jarvis.yaml config loader
+
+# ── System metrics (CPU, RAM — gui.py SystemMetricsWidget) ────────────────────
+psutil==6.1.1
+
+# ── Vision: webcam + screen → local LLaVA via Ollama ─────────────────────────
+opencv-python==4.12.0.88
+numpy==2.2.6
+mss==10.1.0
+pydub==0.25.1            # audio utilities (keep for potential future use)
+
+# ── Code generation → VS Code automation ─────────────────────────────────────
+PyAutoGUI==0.9.54
+pyperclip==1.11.0
+
+# ── Windows integration ───────────────────────────────────────────────────────
+pywin32==311
+
+# ── Wake word (offline Porcupine) ─────────────────────────────────────────────
+pvporcupine==3.0.5
+sounddevice==0.5.2
+openai-whisper==20250625
+soundfile==0.13.1
+
+# ── Optional: local music playback ────────────────────────────────────────────
+python-vlc==3.0.21203
+
+# ── Dev / Testing ─────────────────────────────────────────────────────────────
+pytest==8.3.5
+
+# Note: LLM and vision models run in Ollama (external service), not pip.
+#   Models: llama3.2:3b (chat), llava:13b (vision)

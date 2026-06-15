@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# J.A.R.V.I.S — .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Virtual environments — do NOT commit these ────────────────────────────────
+jarvis_env/
+jarvis/
+.venv/
+venv/
+env/
+
+# ── Local tool settings (reveals local file paths) ────────────────────────────
+.claude/
+
+# ── One-off helper scripts ─────────────────────────────────────────────────────
+seed_commits.sh
+seed_commits.bat
+
+# ── Compiled Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# ── Wake word model (large binary, distribute separately) ─────────────────────
+models/
+
+# ── Personal data — memory stores ────────────────────────────────────────────
+memory.json
+memory.db
+memory.db-wal
+memory.db-shm
+
+# ── TTS temp files ────────────────────────────────────────────────────────────
+tts_*.mp3
+*.mp3
+
+# ── Backup files ──────────────────────────────────────────────────────────────
+*.bak
+*.session.bak
+
+# ── Backups / quarantine ──────────────────────────────────────────────────────
+_backup_cleanup/
+_deldir/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── OS junk ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+secrets.yaml
+
+# ── Test artifacts ────────────────────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ── Runtime output ────────────────────────────────────────────────────────────
+widget_data/
