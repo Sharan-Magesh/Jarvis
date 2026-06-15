@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# J.A.R.V.I.S — Central Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+identity:
+  name: "J.A.R.V.I.S"
+  owner: "Sir"                     # How Jarvis addresses the user
+  creator: "Sharan"                # Used in the LLM persona ("built by ___")
+
+# ── LLM / Ollama ─────────────────────────────────────────────────────────────
+llm:
+  url: "http://localhost:11434"
+  model: "llama3.2:3b"             # llama3.2:3b — fastest at 3B, 128K ctx
+  timeout: 120                     # seconds
+  history_limit: 12                # conversation turns sent as context
+  temperature: 0.35
+  top_p: 0.9
+  num_ctx: 2048
+  num_predict: 80
+
+# ── Vision / VLM ─────────────────────────────────────────────────────────────
+vision:
+  model: "llava:13b"
+  endpoint: "http://localhost:11434/api/generate"
+  max_image_side: 896
+  camera_index: 0
+  timeout_sec: 90
+
+# ── TTS ───────────────────────────────────────────────────────────────────────
+tts:
+  primary_voice: "en-US-GuyNeural"          # Edge TTS — neural
+  tamil_voice:   "ta-IN-ValluvarNeural"     # Edge TTS — Tamil neural
+  fallback: "pyttsx3"                       # offline fallback
+
+# ── STT / Microphone ──────────────────────────────────────────────────────────
+stt:
+  language: "en-IN"
+  sample_rate: 16000
+  energy_threshold: 250
+  pause_threshold: 1.6
+  non_speaking_duration: 0.8
+  mic_name: null                   # null = system default; set partial name to auto-select
+
+# ── Wake Word ─────────────────────────────────────────────────────────────────
+wake:
+  keyword: "jarvis"
+  sensitivity: 0.5                 # 0.0–1.0 (higher = more sensitive, more false positives)
+  post_tts_cooldown: 2.5           # seconds to wait after speaking before listening
+
+# ── Conversation ──────────────────────────────────────────────────────────────
+conversation:
+  idle_timeout: 600                # seconds before Jarvis returns to standby
+  silent_prompt_threshold: 25     # seconds of silence before gentle nudge
+  hard_timeout: 120               # seconds after nudge before auto-standby
+
+# ── Memory ────────────────────────────────────────────────────────────────────
+memory:
+  db_path: "memory.db"
+  migrate_json: "memory.json"      # migrate from old JSON on first run if exists
