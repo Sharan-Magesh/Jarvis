@@ -71,6 +71,10 @@ _WIT_ACKS = [
     "Already ahead of you, Sir.",
     "As you wish.",
     "It would be my pleasure. A low bar, admittedly, but a pleasure nonetheless.",
+    "Done. You're welcome.",
+    "Executed. Do try to look impressed.",
+    "Completed. I've added it to my list of trivial achievements.",
+    "Handled. I hope this frees you up for something equally unchallenging.",
 ]
 
 _WIT_THINKING = [
@@ -79,6 +83,10 @@ _WIT_THINKING = [
     "One moment, Sir.",
     "Consulting the archives...",
     "Processing. Please do not pace.",
+    "Searching. Your patience is... noted.",
+    "Querying my vast and underappreciated intelligence...",
+    "Thinking. It happens.",
+    "Allow me to pretend this requires effort.",
 ]
 
 # App-specific quips — dry, not sycophantic
@@ -101,15 +109,32 @@ _APP_QUIPS = {
     "control panel":        "Opening Control Panel. The last bastion of Windows XP nostalgia.",
     "terminal":             "Opening Terminal. I trust you know what you're doing. Mostly.",
     "cmd":                  "Opening Command Prompt. Old school. Respect.",
+    "netflix":              "Opening Netflix. Productivity was a nice concept.",
+    "clock":                "Opening Clock. Presumably you've misplaced the one on every device you own.",
+    "camera":               "Opening Camera. Smile, Sir. Or don't. Statistically it makes little difference.",
+    "photos":               "Opening Photos. Memory lane awaits. Please drive carefully.",
+    "paint":                "Opening Paint. The Renaissance would have been considerably shorter.",
+    "mail":                 "Opening Mail. I'd say 'you've got mail', but the bar is already low enough.",
+    "microsoft word":       "Opening Word. I'll have the formatting issues ready when you are.",
+    "word":                 "Opening Word. I'll have the formatting issues ready when you are.",
+    "microsoft excel":      "Opening Excel. Spreadsheets: because someone has to care about the numbers.",
+    "excel":                "Opening Excel. Spreadsheets: because someone has to care about the numbers.",
+    "powerpoint":           "Opening PowerPoint. The world will wait with bated breath.",
+    "microsoft powerpoint": "Opening PowerPoint. The world will wait with bated breath.",
+    "obs":                  "Opening OBS. Broadcasting your genius to an unsuspecting world.",
+    "blender":              "Opening Blender. Artistic ambition and technical suffering, combined.",
+    "vlc":                  "Opening VLC. It plays everything. Even things that probably shouldn't be played.",
+    "zoom":                 "Opening Zoom. Mute yourself. You know why.",
+    "teams":                "Opening Teams. Another meeting that could have been an email.",
 }
 
 _BOOT_LINES = [
     ("Initializing J.A.R.V.I.S. — Just A Rather Very Intelligent System.", 0.2),
-    ("Running neural subsystem diagnostics… nominal.", 0.2),
-    ("Voice synthesis… online.", 0.15),
-    ("Memory banks… intact.", 0.15),
-    ("Launcher index… building in background.", 0.15),
-    ("All systems operational, Sir.", 0.3),
+    ("Running neural subsystem diagnostics… all nominal. As expected.", 0.2),
+    ("Voice synthesis… online. You're welcome.", 0.15),
+    ("Memory banks… intact. Your secrets remain safe. Mostly.", 0.15),
+    ("Launcher index… building in background. Multitasking — unlike some.", 0.15),
+    ("All systems operational, Sir. Try to keep up.", 0.3),
 ]
 
 
@@ -131,15 +156,15 @@ def _app_quip(app_name: str) -> str | None:
 def _time_greeting() -> str:
     h = datetime.now().hour
     if h < 5:
-        return "Working at this hour again, Sir. At least one of us never sleeps."
+        return "Working at this hour again, Sir. At least one of us never sleeps. I'll file it under 'chronic'."
     elif h < 12:
-        return "Good morning, Sir."
+        return "Good morning, Sir. Another day, another opportunity to exceed my expectations — which, to be clear, are not high."
     elif h < 17:
-        return "Good afternoon, Sir."
+        return "Good afternoon, Sir. I trust the morning was productive. No need to answer that."
     elif h < 21:
-        return "Good evening, Sir."
+        return "Good evening, Sir. Shall we accomplish something, or is this purely social?"
     else:
-        return "Working late again, Sir. Shall I flag this as a recurring concern?"
+        return "Working late again, Sir. I've started keeping a tally. We're well into double digits."
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -379,11 +404,9 @@ class EnhancedJarvis:
         self.vision_panel   = None
         self.ui_notify      = None
         self.user_msg_cb    = None
-        self.lang_change_cb = None
         self.boot_line_cb   = None   # fn(line: str) — feeds boot overlay in GUI
 
-        # ── Language / TTS ───────────────────────────────────────────────────
-        self.tamil_mode = False
+        # ── TTS voice ────────────────────────────────────────────────────────
         self.tts_voice  = _cfg("tts", "primary_voice", "en-US-GuyNeural")
 
         # ── App launcher index ────────────────────────────────────────────────
@@ -516,8 +539,6 @@ class EnhancedJarvis:
     def speak(self, text: str):
         print(f"Jarvis (queued): {text}")
         self.history.append({"role": "assistant", "content": text})
-        if self.tamil_mode:
-            text = self._translate_to_tamil(text)
         self.speak_queue.put(text)
         self.last_activity = time.time()
 
@@ -589,11 +610,11 @@ class EnhancedJarvis:
         try:
             result = system_action(action, confirm=True, countdown=5)
             if isinstance(result, dict) and not result.get("ok", True):
-                return f"Couldn't perform {action}: {result.get('msg', 'Unknown error')}"
+                return f"Couldn't perform {action}: {result.get('msg', 'Unknown error')}. I blame the hardware."
             if hasattr(result, "returncode") and result.returncode != 0:
-                return f"{action.title()} command failed."
+                return f"{action.title()} command failed. Even I have bad days."
             self.history.append({"role": "assistant", "content": f"Power action: {action}"})
-            return f"Executing {action}. Farewell, Sir."
+            return f"Initiating {action}. It has been, as always, a privilege. Mostly."
         except Exception as e:
             return f"Error during {action}: {e}"
 
@@ -708,10 +729,20 @@ class EnhancedJarvis:
                 any(t.startswith(w) for w in
                     ["what", "who", "where", "when", "how", "which", "is ", "are "]))
 
+    _MEMORY_ACKS = [
+        "Noted, Sir. Filed under things I will never forget, unlike some.",
+        "Committed to memory. Unlike biological memory, mine doesn't fabricate details.",
+        "Stored. You may now forget it yourself — I'll remember for both of us.",
+        "Logged. I appreciate the trust, even if the information is underwhelming.",
+        "Recorded. Your secrets remain safe. Mostly.",
+    ]
+
     def _store_fact(self, key: str, value: str):
+        import random
         nk = self._normalize_fact_key(key)
         self.memory.set_fact(nk, value)
-        self.speak(f"Noted, Sir. {key.capitalize()}: {value}.")
+        ack = random.choice(self._MEMORY_ACKS)
+        self.speak(f"{ack} {key.capitalize()}: {value}.")
 
     def _remember_any(self, user_text: str):
         """Parse and store facts from natural language."""
@@ -761,9 +792,9 @@ class EnhancedJarvis:
             if close:
                 value = all_facts[close[0]]
         if value:
-            self.speak(f"Your {raw_key} is {value}, Sir.")
+            self.speak(f"Your {raw_key} is {value}, Sir. Glad one of us remembers.")
             return True
-        self.speak(f"No record of your {raw_key} in the memory banks, Sir.")
+        self.speak(f"No record of your {raw_key} in the memory banks, Sir. Either you never told me, or it was deeply unimpressive.")
         return True
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1155,16 +1186,6 @@ class EnhancedJarvis:
         print(f"Processing command: {command}")
         lower = command.lower().strip()
 
-        # ── Language switching ────────────────────────────────────────────────
-        if re.search(r"\bspeak\s+tamil\b|\bswitch\s+to\s+tamil\b|\btamil\s+mode\b", lower):
-            self.set_tamil_mode(True)
-            self.speak("சரி, இனி தமிழில் பேசுகிறேன்.")
-            return
-        if re.search(r"\bspeak\s+english\b|\bswitch\s+to\s+english\b|\benglish\s+mode\b", lower):
-            self.set_tamil_mode(False)
-            self.speak("Switched back to English, Sir.")
-            return
-
         # ── Vision ────────────────────────────────────────────────────────────
         vk = self._match_vision_intent(lower)
         if vk:
@@ -1302,7 +1323,7 @@ class EnhancedJarvis:
     # CONVERSATION LOOP
     # -------------------------------------------------------------------------
     def conversation_mode(self, idle_timeout=600):
-        self.speak("Go ahead, Sir. I'm listening.")
+        self.speak("Go ahead, Sir. You have my undivided, if slightly reluctant, attention.")
         self.last_activity = time.time()
         silent_prompts = 0
         while True:
@@ -1337,39 +1358,6 @@ class EnhancedJarvis:
                 time.sleep(0.2)
 
     # -------------------------------------------------------------------------
-    # LANGUAGE — Tamil
-    # -------------------------------------------------------------------------
-    def set_tamil_mode(self, enabled):
-        self.tamil_mode = enabled
-        if enabled:
-            self.tts_voice = _cfg("tts", "tamil_voice", "ta-IN-ValluvarNeural")
-            print("[lang] Tamil mode ON")
-        else:
-            self.tts_voice = _cfg("tts", "primary_voice", "en-US-GuyNeural")
-            print("[lang] Tamil mode OFF")
-        try:
-            if callable(self.lang_change_cb):
-                self.lang_change_cb(enabled)
-        except Exception:
-            pass
-
-    def _translate_to_tamil(self, text):
-        if not text or not text.strip():
-            return text
-        try:
-            import urllib.parse
-            params = urllib.parse.urlencode({"q": text[:500], "langpair": "en|ta"})
-            url    = f"https://api.mymemory.translated.net/get?{params}"
-            r      = requests.get(url, timeout=6)
-            if r.status_code == 200:
-                translated = r.json().get("responseData", {}).get("translatedText", "")
-                if translated and translated.strip() != text.strip():
-                    return translated
-        except Exception as exc:
-            print(f"[lang] Translation failed: {exc}")
-        return text
-
-    # -------------------------------------------------------------------------
     # UI GLUE
     # -------------------------------------------------------------------------
     def attach_vision(self, panel):
@@ -1380,9 +1368,6 @@ class EnhancedJarvis:
 
     def set_user_message_callback(self, cb):
         self.user_msg_cb = cb
-
-    def set_lang_change_callback(self, cb):
-        self.lang_change_cb = cb
 
     def set_boot_line_callback(self, cb):
         self.boot_line_cb = cb

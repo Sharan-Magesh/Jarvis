@@ -14,10 +14,11 @@ llm:
   model: "llama3.2:3b"             # llama3.2:3b — fastest at 3B, 128K ctx
   timeout: 120                     # seconds
   history_limit: 12                # conversation turns sent as context
-  temperature: 0.35
-  top_p: 0.9
+  temperature: 0.2                  # lower = fewer hallucinations
+  top_p: 0.80                       # tighter nucleus sampling
   num_ctx: 2048
   num_predict: 80
+  repeat_penalty: 1.15              # penalise looping / padding
 
 # ── Vision / VLM ─────────────────────────────────────────────────────────────
 vision:
@@ -30,7 +31,6 @@ vision:
 # ── TTS ───────────────────────────────────────────────────────────────────────
 tts:
   primary_voice: "en-US-GuyNeural"          # Edge TTS — neural
-  tamil_voice:   "ta-IN-ValluvarNeural"     # Edge TTS — Tamil neural
   fallback: "pyttsx3"                       # offline fallback
 
 # ── STT / Microphone ──────────────────────────────────────────────────────────

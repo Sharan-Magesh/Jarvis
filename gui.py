@@ -25,19 +25,20 @@ from integrations.vision_wiring import build_vision_on_request
 # ─────────────────────────────────────────────────────────────────────────────
 # PALETTE
 # ─────────────────────────────────────────────────────────────────────────────
-_BG        = "#060a0e"
-_CARD      = "#0b1117"
-_BORDER    = "rgba(0,212,255,0.10)"
-_TEXT      = "#c9e8f0"
-_MUTED     = "#2e4a55"
+_BG        = "#050810"
+_CARD      = "#080d14"
+_BORDER    = "rgba(0,212,255,0.08)"
+_TEXT      = "#b8d8e8"
+_MUTED     = "#1e3a46"
 _ACCENT    = QColor(0, 212, 255)
+_ACCENT2   = QColor(0, 180, 255)
 
 _BADGE_STATES = {
-    "IDLE":      ("#00d4ff", "rgba(0,212,255,0.10)"),
-    "LISTENING": ("#00ff9d", "rgba(0,255,157,0.10)"),
-    "THINKING":  ("#ffd700", "rgba(255,215,0,0.10)"),
-    "SPEAKING":  ("#e879f9", "rgba(232,121,249,0.10)"),
-    "BOOT":      ("#ff6b35", "rgba(255,107,53,0.10)"),
+    "IDLE":      ("#00d4ff", "rgba(0,212,255,0.08)"),
+    "LISTENING": ("#00ff9d", "rgba(0,255,157,0.08)"),
+    "THINKING":  ("#ffd700", "rgba(255,215,0,0.08)"),
+    "SPEAKING":  ("#e879f9", "rgba(232,121,249,0.08)"),
+    "BOOT":      ("#ff6b35", "rgba(255,107,53,0.08)"),
 }
 _REACTOR_COLORS = {
     "IDLE":      QColor(0,  212, 255),
@@ -57,7 +58,7 @@ QWidget {{
 QFrame#Card {{
     background: {_CARD};
     border: 1px solid {_BORDER};
-    border-radius: 16px;
+    border-radius: 12px;
 }}
 QTextEdit#ChatLog {{
     background: transparent;
@@ -65,14 +66,14 @@ QTextEdit#ChatLog {{
     color: {_TEXT};
     font-size: 13px;
     padding: 2px 4px;
-    selection-background-color: rgba(0,212,255,0.20);
+    selection-background-color: rgba(0,212,255,0.15);
 }}
 QScrollBar:vertical {{
-    background: transparent; width: 5px; margin: 0; border: none;
+    background: transparent; width: 3px; margin: 0; border: none;
 }}
 QScrollBar::handle:vertical {{
-    background: rgba(0,212,255,0.20);
-    border-radius: 3px; min-height: 28px;
+    background: rgba(0,212,255,0.18);
+    border-radius: 2px; min-height: 28px;
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -132,6 +133,45 @@ class HexGridWidget(QWidget):
                 path.closeSubpath()
                 p.drawPath(path)
 
+        p.end()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCANLINE OVERLAY
+# ─────────────────────────────────────────────────────────────────────────────
+class ScanlineWidget(QWidget):
+    """Subtle moving horizontal scanline — classic sci-fi HUD effect."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setAutoFillBackground(False)
+        self._y = 0.0
+        t = QTimer(self)
+        t.timeout.connect(self._tick)
+        t.start(16)
+
+    def _tick(self):
+        self._y = (self._y + 1.4) % (self.height() + 60)
+        self.update()
+
+    def paintEvent(self, event):
+        w, h = self.width(), self.height()
+        if w <= 0 or h <= 0:
+            return
+        p = QPainter(self)
+        # Horizontal scan band
+        grad = QLinearGradient(0, self._y - 40, 0, self._y + 40)
+        grad.setColorAt(0.0, QColor(0, 212, 255, 0))
+        grad.setColorAt(0.45, QColor(0, 212, 255, 7))
+        grad.setColorAt(0.5,  QColor(0, 212, 255, 12))
+        grad.setColorAt(0.55, QColor(0, 212, 255, 7))
+        grad.setColorAt(1.0, QColor(0, 212, 255, 0))
+        p.fillRect(0, int(self._y) - 40, w, 80, QBrush(grad))
+        # Fine horizontal lines for CRT texture
+        p.setPen(QPen(QColor(0, 212, 255, 3), 1))
+        for y in range(0, h, 3):
+            p.drawLine(0, y, w, y)
         p.end()
 
 
@@ -588,6 +628,11 @@ class JarvisUI(QWidget):
         self._hex.lower()
         self._hex.setGeometry(self.rect())
 
+        # Scanline overlay — above hex, below content
+        self._scanline = ScanlineWidget(self)
+        self._scanline.setGeometry(self.rect())
+        self._scanline.raise_()
+
         # Corner brackets float on top
         self._brackets = CornerBracketsWidget(self)
         self._brackets.raise_()
@@ -603,98 +648,53 @@ class JarvisUI(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        for w in (self._hex, self._brackets, self._boot_overlay):
+        for w in (self._hex, self._scanline, self._brackets, self._boot_overlay):
             w.setGeometry(self.rect())
 
     # ── Header ────────────────────────────────────────────────────────────────
     def _build_header(self) -> QFrame:
         frame = QFrame(); frame.setObjectName("Card")
-        frame.setFixedHeight(64)
+        frame.setFixedHeight(58)
         lay = QHBoxLayout(frame)
-        lay.setContentsMargins(22, 0, 22, 0)
-        lay.setSpacing(14)
+        lay.setContentsMargins(24, 0, 24, 0)
+        lay.setSpacing(0)
 
-        dot = QLabel("●")
-        dot.setStyleSheet("color: #00d4ff; font-size: 10px;")
-        dot.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-
+        # Left: identity block
         title = QLabel("J.A.R.V.I.S")
         title.setStyleSheet(
-            "font-size: 22px; font-weight: 800; letter-spacing: 5px; color: #00d4ff;"
+            "font-size: 20px; font-weight: 700; letter-spacing: 6px; color: #00d4ff;"
+            "font-family: 'Segoe UI', 'Courier New', monospace;"
         )
         title.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        subtitle = QLabel("Just A Rather Very Intelligent System")
-        subtitle.setStyleSheet(f"color: {_MUTED}; font-size: 11px; letter-spacing: 1px;")
+        sep = QLabel("  |  ")
+        sep.setStyleSheet(f"color: {_MUTED}; font-size: 14px;")
+        sep.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        subtitle = QLabel("JUST A RATHER VERY INTELLIGENT SYSTEM")
+        subtitle.setStyleSheet(
+            f"color: {_MUTED}; font-size: 9px; letter-spacing: 2px;"
+        )
         subtitle.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        lay.addWidget(title)
+        lay.addWidget(sep)
+        lay.addWidget(subtitle)
+        lay.addStretch()
+
+        # Right: version tag + status badge
+        ver = QLabel("v3.0")
+        ver.setStyleSheet(f"color: {_MUTED}; font-size: 9px; letter-spacing: 1px; margin-right: 16px;")
+        ver.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self.status_badge = QLabel("BOOT")
         self.status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_badge.setFixedSize(96, 26)
+        self.status_badge.setFixedSize(90, 24)
         self._apply_badge("BOOT")
 
-        self.lang_btn = self._make_lang_btn(tamil=False)
-        self.lang_btn.setFixedSize(108, 28)
-        self.lang_btn.clicked.connect(self._toggle_language)
-
-        lay.addWidget(dot)
-        lay.addWidget(title)
-        lay.addWidget(subtitle)
-        lay.addStretch()
-        lay.addWidget(self.lang_btn)
+        lay.addWidget(ver)
         lay.addWidget(self.status_badge)
         return frame
-
-    def _make_lang_btn(self, tamil: bool) -> QPushButton:
-        btn = QPushButton("🇮🇳  Tamil" if not tamil else "🇬🇧  English")
-        color = "#ffd700" if tamil else "#00d4ff"
-        btn.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(0,0,0,0);
-                border: 1px solid {color};
-                color: {color};
-                border-radius: 14px;
-                font-size: 11px; font-weight: 600; padding: 2px 10px;
-            }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.06); }}
-        """)
-        return btn
-
-    def _toggle_language(self):
-        if self.jarvis is None:
-            return
-        self.jarvis.set_tamil_mode(not self.jarvis.tamil_mode)
-
-    def _on_lang_changed(self, tamil: bool):
-        QTimer.singleShot(0, lambda t=tamil: self._update_lang_btn(t))
-
-    def _update_lang_btn(self, tamil: bool):
-        self.lang_btn.setText("🇬🇧  English" if tamil else "🇮🇳  Tamil")
-        color = "#ffd700" if tamil else "#00d4ff"
-        self.lang_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(0,0,0,0);
-                border: 1px solid {color};
-                color: {color};
-                border-radius: 14px;
-                font-size: 11px; font-weight: 600; padding: 2px 10px;
-            }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.06); }}
-        """)
-        lang_tag  = "  🇮🇳 TAMIL" if tamil else ""
-        col_label = "#ffd700" if tamil else _MUTED
-        self.conv_label.setText(f"CONVERSATION{lang_tag}")
-        self.conv_label.setStyleSheet(
-            f"color: {col_label}; font-size: 10px; font-weight: 700; letter-spacing: 2px;"
-        )
-        msg    = "🇮🇳 Switched to Tamil mode" if tamil else "🇬🇧 Switched back to English"
-        accent = "#ffd700" if tamil else "#00d4ff"
-        html   = (
-            f'<div style="text-align:center;margin:8px 0;">'
-            f'<span style="color:{accent};font-size:10px;font-style:italic;">{msg}</span>'
-            f'</div>'
-        )
-        QTimer.singleShot(0, lambda: self.chat_log.append(html))
 
     def _apply_badge(self, state: str):
         color, bg = _BADGE_STATES.get(state, _BADGE_STATES["IDLE"])
@@ -704,8 +704,9 @@ class JarvisUI(QWidget):
                 background: {bg};
                 border: 1px solid {color};
                 color: {color};
-                border-radius: 13px;
-                font-size: 10px; font-weight: 700; letter-spacing: 2px;
+                border-radius: 4px;
+                font-size: 9px; font-weight: 700; letter-spacing: 2.5px;
+                font-family: 'Consolas', monospace;
             }}
         """)
 
@@ -743,20 +744,32 @@ class JarvisUI(QWidget):
         ll.addWidget(self.waveform)
         ll.addStretch()
 
-        # Status data rows below reactor
+        # Divider
+        div = QFrame()
+        div.setFrameShape(QFrame.Shape.HLine)
+        div.setStyleSheet(f"border: none; border-top: 1px solid rgba(0,212,255,0.08);")
+        ll.addWidget(div)
+
+        # System status grid — two columns, tight
         status_data = [
-            ("NEURAL LINK",   "ACTIVE"),
-            ("VOICE ENGINE",  "EDGE TTS"),
-            ("MEMORY",        "SQLite"),
-            ("VISION",        "LLaVA 13B"),
+            ("LLM",     "llama3.2:3b"),
+            ("TTS",     "Edge Neural"),
+            ("MEMORY",  "SQLite WAL"),
+            ("VISION",  "LLaVA 13B"),
         ]
         for label, value in status_data:
             row_w = QHBoxLayout()
-            row_w.setContentsMargins(0, 0, 0, 0)
+            row_w.setContentsMargins(0, 1, 0, 1)
             lbl = QLabel(label)
-            lbl.setStyleSheet(f"color: {_MUTED}; font-size: 9px; letter-spacing: 1px;")
+            lbl.setStyleSheet(
+                "color: rgba(46,74,85,0.85); font-size: 8px; letter-spacing: 1.5px;"
+                "font-family: 'Consolas', monospace;"
+            )
             val = QLabel(value)
-            val.setStyleSheet("color: #00d4ff; font-size: 9px; font-weight: 700;")
+            val.setStyleSheet(
+                "color: rgba(0,212,255,0.75); font-size: 8px; font-weight: 600;"
+                "font-family: 'Consolas', monospace;"
+            )
             row_w.addWidget(lbl)
             row_w.addStretch()
             row_w.addWidget(val)
@@ -770,15 +783,24 @@ class JarvisUI(QWidget):
         rl.setContentsMargins(22, 18, 22, 18)
         rl.setSpacing(10)
 
-        self.conv_label = QLabel("CONVERSATION")
+        conv_header = QHBoxLayout()
+        self.conv_label = QLabel("CONVERSATION LOG")
         self.conv_label.setStyleSheet(
-            f"color: {_MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 2px;"
+            "color: rgba(46,74,85,0.9); font-size: 9px; font-weight: 700;"
+            "letter-spacing: 2.5px; font-family: 'Consolas', monospace;"
         )
-        rl.addWidget(self.conv_label)
+        conv_header.addWidget(self.conv_label)
+        conv_header.addStretch()
+        dot_live = QLabel("● LIVE")
+        dot_live.setStyleSheet(
+            "color: rgba(0,255,157,0.6); font-size: 8px; letter-spacing: 1px;"
+        )
+        conv_header.addWidget(dot_live)
+        rl.addLayout(conv_header)
 
         div = QFrame()
         div.setFrameShape(QFrame.Shape.HLine)
-        div.setStyleSheet(f"border: none; border-top: 1px solid {_BORDER};")
+        div.setStyleSheet("border: none; border-top: 1px solid rgba(0,212,255,0.06);")
         rl.addWidget(div)
 
         self.chat_log = QTextEdit()
@@ -853,7 +875,6 @@ class JarvisUI(QWidget):
         self.jarvis.set_user_message_callback(
             lambda text: self._append_message("You", text, is_jarvis=False)
         )
-        self.jarvis.set_lang_change_callback(self._on_lang_changed)
 
         orig_speak = self.jarvis.speak
 
@@ -885,17 +906,23 @@ class JarvisUI(QWidget):
 
     def _append_message(self, sender: str, text: str, is_jarvis: bool = True):
         from datetime import datetime
-        ts        = datetime.now().strftime("%H:%M")
-        accent    = "#00d4ff" if is_jarvis else "#00ff9d"
-        align     = "left"  if is_jarvis else "right"
-        bubble_bg = "rgba(0,212,255,0.06)" if is_jarvis else "rgba(0,255,157,0.06)"
+        ts         = datetime.now().strftime("%H:%M:%S")
+        accent     = "#00d4ff" if is_jarvis else "#00ff9d"
+        align      = "left"   if is_jarvis else "right"
+        bar_color  = "rgba(0,212,255,0.35)" if is_jarvis else "rgba(0,255,157,0.35)"
+        text_color = "#b8d8e8" if is_jarvis else "#d8f0d8"
+        border_l   = f'border-left: 2px solid {bar_color};' if is_jarvis else ''
+        border_r   = f'border-right: 2px solid {bar_color};' if not is_jarvis else ''
+        pad_l      = "padding-left: 10px;" if is_jarvis else "padding-right: 10px;"
         html = (
-            f'<div style="margin-bottom:14px;text-align:{align};">'
-            f'<span style="color:{accent};font-weight:700;font-size:10px;letter-spacing:2px;">'
-            f'{sender.upper()}</span>'
-            f'<span style="color:#2e4a55;font-size:9px;margin-left:8px;">{ts}</span><br>'
-            f'<span style="display:inline-block;background:{bubble_bg};'
-            f'border-radius:8px;padding:6px 10px;color:#c9e8f0;line-height:1.75;">'
+            f'<div style="margin-bottom:16px;text-align:{align};">'
+            f'<span style="color:{accent};font-weight:600;font-size:9px;letter-spacing:2px;'
+            f'font-family:\'Consolas\',monospace;">{sender.upper()}</span>'
+            f'<span style="color:rgba(46,74,85,0.7);font-size:8px;margin-left:8px;'
+            f'font-family:\'Consolas\',monospace;">{ts}</span><br>'
+            f'<span style="{border_l}{border_r}{pad_l}'
+            f'color:{text_color};font-size:12.5px;line-height:1.8;display:inline-block;'
+            f'margin-top:3px;max-width:92%;">'
             f'{text}</span></div>'
         )
 
