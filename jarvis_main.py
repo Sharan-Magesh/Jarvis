@@ -628,21 +628,40 @@ class EnhancedJarvis:
         if (time.time() - self.last_tts_ended) < self.post_tts_cooldown:
             time.sleep(0.05)
             return False
+
+        # Notify UI
+        try:
+            if callable(self.ui_notify):
+                self.ui_notify("listening")
+        except Exception:
+            pass
+
+        # ── Path 1: Porcupine (purpose-built, no internet, always-on) ────────
+        try:
+            from wake import listen_for_wake
+            print("Listening for wake word (Porcupine)…")
+            detected = listen_for_wake(timeout=4.0)
+            if detected:
+                print("[wake] Porcupine: wake word detected.")
+                return True
+            return False   # timed out cleanly; loop will retry
+        except Exception as exc:
+            # Model missing, key invalid, sounddevice error — fall through
+            if not getattr(self, "_porcupine_warned", False):
+                print(f"[wake] Porcupine unavailable ({exc}). Using Google STT fallback.")
+                self._porcupine_warned = True
+
+        # ── Path 2: Google STT fallback ───────────────────────────────────────
         try:
             with self.microphone as source:
-                print("Listening for wake word 'Jarvis'…")
-                try:
-                    if callable(self.ui_notify):
-                        self.ui_notify("listening")
-                except Exception:
-                    pass
-                audio = self.recognizer.listen(source, timeout=3, phrase_time_limit=4)
+                print("Listening for wake word (Google STT)…")
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=4)
             text = self.recognizer.recognize_google(
                 audio, language=self.asr_language
             ).lower()
-            print(f"Heard: {text}")
-            if "jarvis" in text:
-                print("Wake word detected: jarvis")
+            print(f"[wake] Heard: {text!r}")
+            if "jarvis" in text or "jarvis" in text.replace(" ", ""):
+                print("[wake] Wake word detected (Google STT).")
                 return True
         except (sr.WaitTimeoutError, sr.UnknownValueError):
             pass
