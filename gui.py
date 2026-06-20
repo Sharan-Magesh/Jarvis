@@ -1,4 +1,4 @@
-# gui.py — J.A.R.V.I.S. Minimalist Breathing HUD
+# gui.py — J.A.R.V.I.S. Glassmorphism HUD
 import math
 import threading
 import time
@@ -11,7 +11,8 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QTextEdit,
 )
 from PyQt6.QtGui import (
-    QPainter, QColor, QBrush, QPen, QRadialGradient, QFont,
+    QPainter, QColor, QBrush, QPen, QLinearGradient, QRadialGradient,
+    QPainterPath, QFont, QPalette,
 )
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
 
@@ -19,12 +20,8 @@ from ui.vision_panel import VisionPanel
 from integrations.vision_wiring import build_vision_on_request
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PALETTE & STATE COLORS
+# PALETTE
 # ─────────────────────────────────────────────────────────────────────────────
-_BG   = "#03050a"
-_TEXT = "#9ab8c8"
-_DIM  = "#162430"
-
 _STATE_COLORS = {
     "IDLE":      QColor(0,   175, 215),
     "LISTENING": QColor(0,   210, 120),
@@ -35,44 +32,97 @@ _STATE_COLORS = {
 _STATE_HEX = {k: f"#{v.red():02x}{v.green():02x}{v.blue():02x}"
               for k, v in _STATE_COLORS.items()}
 
-_STYLE = f"""
-QWidget {{
-    background-color: {_BG};
-    color: {_TEXT};
+_STYLE = """
+QLabel {
+    background: transparent;
+    color: #b0ccd8;
     font-family: 'Segoe UI', 'Inter', Arial, sans-serif;
     font-size: 13px;
-}}
-QTextEdit#ChatLog {{
+}
+QTextEdit#ChatLog {
     background: transparent;
     border: none;
-    color: {_TEXT};
+    color: #b0ccd8;
     font-size: 13px;
-    padding: 0px 4px;
-    selection-background-color: rgba(0,175,215,0.12);
-}}
-QScrollBar:vertical {{
+    padding: 0 4px;
+    selection-background-color: rgba(0,175,215,30);
+}
+QScrollBar:vertical {
     background: transparent; width: 2px; margin: 0; border: none;
-}}
-QScrollBar::handle:vertical {{
-    background: rgba(0,175,215,0.14);
+}
+QScrollBar::handle:vertical {
+    background: rgba(0,175,215,30);
     border-radius: 1px; min-height: 20px;
-}}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 """
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BREATHING ORB  — the only decoration in the UI
+# GLASS CARD  — frosted-glass panel (simulated; PyQt6 has no backdrop-filter)
 # ─────────────────────────────────────────────────────────────────────────────
-class BreathingOrbWidget(QWidget):
+class GlassCard(QWidget):
     """
-    A soft radial glow that inhales and exhales.
-    Idle: slow 5-second breath cycle, cyan.
-    Active: faster pulse, color shifts with state.
+    Semi-transparent dark panel with top-edge highlight and a subtle border.
+    The illusion of glass comes from the high-contrast dark fill over the
+    nearly-black background and the gradient highlight at the top edge.
     """
-    _IDLE_SPEED   = 0.016   # ~5 s per breath
-    _ACTIVE_SPEED = 0.036   # ~2.5 s per pulse
+
+    def __init__(self, radius: int = 20, parent=None):
+        super().__init__(parent)
+        self._radius = radius
+        self.setAutoFillBackground(False)
+
+    def paintEvent(self, event):
+        w, h = self.width(), self.height()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, w, h), self._radius, self._radius)
+
+        # ── Glass fill ── dark navy, semi-transparent
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(QColor(10, 16, 28, 148)))
+        p.drawPath(path)
+
+        # ── Top highlight ── simulates light from above striking the glass
+        hi = QLinearGradient(0, 0, 0, min(80, h))
+        hi.setColorAt(0.0, QColor(255, 255, 255, 18))
+        hi.setColorAt(1.0, QColor(255, 255, 255,  0))
+        p.setBrush(QBrush(hi))
+        p.drawPath(path)
+
+        # ── Left-edge shimmer ── subtle secondary highlight
+        lh = QLinearGradient(0, 0, min(28, w), 0)
+        lh.setColorAt(0.0, QColor(255, 255, 255,  9))
+        lh.setColorAt(1.0, QColor(255, 255, 255,  0))
+        p.setBrush(QBrush(lh))
+        p.drawPath(path)
+
+        # ── Border ── 1px white outline, ~9% opacity
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(255, 255, 255, 22), 1.0))
+        p.drawRoundedRect(
+            QRectF(0.5, 0.5, w - 1.0, h - 1.0),
+            max(0.0, self._radius - 0.5),
+            max(0.0, self._radius - 0.5),
+        )
+        p.end()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ARC REACTOR  — central animated widget
+# ─────────────────────────────────────────────────────────────────────────────
+class ArcReactorWidget(QWidget):
+    _SPEEDS = {
+        "IDLE":      0.55,
+        "LISTENING": 2.0,
+        "THINKING":  3.2,
+        "SPEAKING":  2.2,
+        "BOOT":      1.1,
+    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -80,90 +130,143 @@ class BreathingOrbWidget(QWidget):
         self.setAutoFillBackground(False)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self._phase = 0.0
-        self._speed = self._IDLE_SPEED
+        self._angle = 0.0
+        self._speed = self._SPEEDS["BOOT"]
 
         c = _STATE_COLORS["BOOT"]
-        self._cr, self._cg, self._cb = float(c.red()), float(c.green()), float(c.blue())
+        self._cr = float(c.red())
+        self._cg = float(c.green())
+        self._cb = float(c.blue())
         self._tr, self._tg, self._tb = self._cr, self._cg, self._cb
 
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(33)   # 30 fps
+        t = QTimer(self)
+        t.timeout.connect(self._tick)
+        t.start(33)   # 30 fps
 
     def set_state(self, state: str):
         c = _STATE_COLORS.get(state, _STATE_COLORS["IDLE"])
-        self._tr, self._tg, self._tb = float(c.red()), float(c.green()), float(c.blue())
-        self._speed = self._ACTIVE_SPEED if state in ("LISTENING", "THINKING", "SPEAKING") \
-                      else self._IDLE_SPEED
+        self._tr = float(c.red())
+        self._tg = float(c.green())
+        self._tb = float(c.blue())
+        self._speed = self._SPEEDS.get(state, 1.0)
 
     def _tick(self):
-        self._phase = (self._phase + self._speed) % (2 * math.pi)
-        lr = 0.05   # color lerp rate
+        self._angle = (self._angle + self._speed) % 360.0
+        lr = 0.05
         self._cr += (self._tr - self._cr) * lr
         self._cg += (self._tg - self._cg) * lr
         self._cb += (self._tb - self._cb) * lr
         self.update()
 
     def paintEvent(self, event):
-        w, h = self.width(), self.height()
-        cx, cy = w / 2, h / 2
+        w, h   = self.width(), self.height()
+        cx, cy = w / 2.0, h / 2.0
+        R      = min(w, h) * 0.44
 
-        # Breath: 0.78 → 1.0 (sin wave)
-        breath = 0.78 + 0.22 * (math.sin(self._phase) * 0.5 + 0.5)
-
-        r = int(self._cr); g = int(self._cg); b = int(self._cb)
-        base = min(w, h) * 0.26 * breath
+        r, g, b = int(self._cr), int(self._cg), int(self._cb)
 
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # 1. Ambient outer glow
+        gr = R * 1.45
+        glow = QRadialGradient(QPointF(cx, cy), gr)
+        glow.setColorAt(0.0, QColor(r, g, b, 40))
+        glow.setColorAt(0.5, QColor(r, g, b, 14))
+        glow.setColorAt(1.0, QColor(0,  0, 0,  0))
         p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(glow))
+        p.drawEllipse(QRectF(cx - gr, cy - gr, gr * 2, gr * 2))
 
-        # Halo — very diffuse, large
-        hr = base * 3.6
-        halo = QRadialGradient(QPointF(cx, cy), hr)
-        halo.setColorAt(0.0, QColor(r, g, b, 16))
-        halo.setColorAt(0.4, QColor(r, g, b, 7))
-        halo.setColorAt(1.0, QColor(0, 0, 0, 0))
-        p.setBrush(QBrush(halo))
-        p.drawEllipse(QRectF(cx - hr, cy - hr, hr * 2, hr * 2))
+        # 2. Concentric rings (4 rings, decreasing opacity inward)
+        ring_specs = [
+            (1.00, 55, 1.3),
+            (0.78, 40, 1.0),
+            (0.58, 30, 0.8),
+            (0.38, 22, 0.7),
+        ]
+        for frac, alpha, lw in ring_specs:
+            rr = R * frac
+            p.setPen(QPen(QColor(r, g, b, alpha), lw))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(QRectF(cx - rr, cy - rr, rr * 2, rr * 2))
 
-        # Mid glow
-        mr = base * 1.85
-        mid = QRadialGradient(QPointF(cx, cy), mr)
-        mid.setColorAt(0.0, QColor(r, g, b, 50))
-        mid.setColorAt(0.55, QColor(r, g, b, 18))
-        mid.setColorAt(1.0,  QColor(0, 0, 0, 0))
-        p.setBrush(QBrush(mid))
-        p.drawEllipse(QRectF(cx - mr, cy - mr, mr * 2, mr * 2))
-
-        # Core orb
-        core = QRadialGradient(QPointF(cx, cy), base)
-        core.setColorAt(0.0,  QColor(min(r+90,255), min(g+90,255), min(b+90,255), 255))
-        core.setColorAt(0.38, QColor(r, g, b, 230))
-        core.setColorAt(0.80, QColor(r//2, g//2, b//2, 100))
-        core.setColorAt(1.0,  QColor(0, 0, 0, 0))
-        p.setBrush(QBrush(core))
-        p.drawEllipse(QRectF(cx - base, cy - base, base * 2, base * 2))
-
-        # Edge ring — pulses with breath
-        ring_a = int(45 + 65 * (math.sin(self._phase) * 0.5 + 0.5))
-        p.setPen(QPen(QColor(r, g, b, ring_a), 0.8))
+        # 3. Outer rotating arc dashes (8 dashes, clockwise)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawEllipse(QRectF(cx - base, cy - base, base * 2, base * 2))
+        for i in range(8):
+            a_deg     = self._angle + i * 45.0
+            brightness = math.cos(math.radians(i * 45)) * 0.5 + 0.5
+            aa        = int(55 + 110 * brightness)
+            p.setPen(QPen(QColor(r, g, b, aa), 1.8))
+            p.drawArc(
+                QRectF(cx - R, cy - R, R * 2, R * 2),
+                int(a_deg * 16),
+                int(20 * 16),
+            )
+
+        # 4. Inner counter-rotating arcs (6 dashes, 62% R)
+        ir = R * 0.62
+        for i in range(6):
+            a_deg = -self._angle * 1.5 + i * 60.0
+            pulse = math.sin(math.radians(i * 60 + self._angle)) * 0.5 + 0.5
+            aa    = int(38 + 82 * pulse)
+            p.setPen(QPen(QColor(r, g, b, aa), 1.3))
+            p.drawArc(
+                QRectF(cx - ir, cy - ir, ir * 2, ir * 2),
+                int(a_deg * 16),
+                int(24 * 16),
+            )
+
+        # 5. Hexagon (very slowly co-rotates at 6% speed)
+        hex_r = R * 0.30
+        path  = QPainterPath()
+        pts   = [
+            QPointF(
+                cx + hex_r * math.cos(math.radians(i * 60 + 30 + self._angle * 0.06)),
+                cy + hex_r * math.sin(math.radians(i * 60 + 30 + self._angle * 0.06)),
+            )
+            for i in range(6)
+        ]
+        path.moveTo(pts[0])
+        for pt in pts[1:]:
+            path.lineTo(pt)
+        path.closeSubpath()
+        p.setPen(QPen(QColor(r, g, b, 42), 1.0))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(path)
+
+        # 6. Core radial glow
+        pulse_v = math.sin(math.radians(self._angle * 0.8)) * 0.5 + 0.5
+        core_r  = R * 0.22
+        wb      = int(80 + 50 * pulse_v)
+        core    = QRadialGradient(QPointF(cx, cy), core_r)
+        core.setColorAt(0.0,  QColor(min(r + wb, 255), min(g + wb, 255), min(b + wb, 255),
+                                     int(200 + 55 * pulse_v)))
+        core.setColorAt(0.35, QColor(r, g, b, 160))
+        core.setColorAt(0.75, QColor(r // 2, g // 2, b // 2, 50))
+        core.setColorAt(1.0,  QColor(0, 0, 0, 0))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(core))
+        p.drawEllipse(QRectF(cx - core_r * 1.3, cy - core_r * 1.3,
+                             core_r * 2.6, core_r * 2.6))
+
+        # 7. White center point
+        dot_a = int(200 + 55 * pulse_v)
+        p.setBrush(QBrush(QColor(255, 255, 255, dot_a)))
+        p.drawEllipse(QRectF(cx - 3.0, cy - 3.0, 6.0, 6.0))
 
         p.end()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VOICE WAVEFORM  — thin, minimal, only visible when speaking
+# WAVEFORM  — thin bar waveform, visible only when speaking
 # ─────────────────────────────────────────────────────────────────────────────
 class WaveformWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAutoFillBackground(False)
-        self.setFixedHeight(32)
+        self.setFixedHeight(28)
         self._amp   = 0.0
         self._phase = 0.0
         self._live  = False
@@ -179,48 +282,47 @@ class WaveformWidget(QWidget):
         self._color = color
 
     def _tick(self):
-        target = 1.0 if self._live else 0.0
-        self._amp = self._amp + (target - self._amp) * 0.08
-        self._phase += 0.28 if self._live else 0.05
+        target    = 1.0 if self._live else 0.0
+        self._amp  = self._amp + (target - self._amp) * 0.08
+        self._phase += 0.30 if self._live else 0.04
         self.update()
 
     def paintEvent(self, event):
         w, h = self.width(), self.height()
         if w <= 0 or h <= 0:
             return
-        p = QPainter(self)
+        p   = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        mid = h / 2
+        mid = h / 2.0
         r, g, b = self._color.red(), self._color.green(), self._color.blue()
 
         if self._amp < 0.01:
-            # Flat rest line
-            p.setPen(QPen(QColor(r, g, b, 22), 1))
-            p.drawLine(QPointF(0, mid), QPointF(w, mid))
+            p.setPen(QPen(QColor(r, g, b, 20), 1))
+            p.drawLine(QPointF(20, mid), QPointF(w - 20, mid))
             p.end()
             return
 
-        bars = 48
-        bw   = w / bars
+        bars = 44
+        bw   = (w - 40.0) / bars
         p.setPen(Qt.PenStyle.NoPen)
         for i in range(bars):
             val = (
-                math.sin(self._phase + i * 0.38) * 0.6
-                + math.sin(self._phase * 1.4 + i * 0.78) * 0.3
-                + math.sin(self._phase * 0.6 + i * 1.1)  * 0.1
+                math.sin(self._phase + i * 0.40) * 0.60
+                + math.sin(self._phase * 1.35 + i * 0.80) * 0.30
+                + math.sin(self._phase * 0.65 + i * 1.10) * 0.10
             )
-            bh  = max(abs(val) * (h * 0.44) * self._amp, 1.2)
-            x   = i * bw + bw / 2
-            a   = int(90 + 100 * self._amp)
-            p.setBrush(QBrush(QColor(r, g, b, a)))
+            bh = max(abs(val) * (h * 0.42) * self._amp, 1.0)
+            x  = 20 + i * bw + bw / 2
+            aa = int(85 + 100 * self._amp)
+            p.setBrush(QBrush(QColor(r, g, b, aa)))
             p.drawRoundedRect(
-                QRectF(x - bw * 0.28, mid - bh, bw * 0.56, bh * 2), 1.5, 1.5
+                QRectF(x - bw * 0.28, mid - bh, bw * 0.56, bh * 2), 1.2, 1.2
             )
         p.end()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BOOT OVERLAY
+# BOOT OVERLAY  — full-screen loading screen with pulsing rings
 # ─────────────────────────────────────────────────────────────────────────────
 class BootOverlayWidget(QWidget):
     def __init__(self, parent=None):
@@ -230,8 +332,21 @@ class BootOverlayWidget(QWidget):
         self._lines:   list[str] = []
         self._alpha  = 255
         self._visible = True
-        self._fade_t  = QTimer(self)
+        self._phase  = 0.0
+
+        # Ring animation timer
+        self._anim_t = QTimer(self)
+        self._anim_t.timeout.connect(self._anim_tick)
+        self._anim_t.start(33)
+
+        # Fade-out timer
+        self._fade_t = QTimer(self)
         self._fade_t.timeout.connect(self._fade_tick)
+
+    def _anim_tick(self):
+        self._phase = (self._phase + 0.05) % (2 * math.pi)
+        if self._visible:
+            self.update()
 
     def add_line(self, text: str):
         self._lines.append(text)
@@ -241,13 +356,14 @@ class BootOverlayWidget(QWidget):
         self.update()
 
     def start_fade(self):
-        self._fade_t.start(18)
+        self._fade_t.start(16)
 
     def _fade_tick(self):
-        self._alpha = max(0, self._alpha - 5)
+        self._alpha = max(0, self._alpha - 4)
         self.update()
         if self._alpha <= 0:
             self._fade_t.stop()
+            self._anim_t.stop()
             self._visible = False
             self.hide()
 
@@ -255,52 +371,78 @@ class BootOverlayWidget(QWidget):
         if not self._visible:
             return
         w, h = self.width(), self.height()
+        cx   = w / 2.0
+        a    = self._alpha
+
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Solid dark backdrop
-        p.fillRect(self.rect(), QColor(3, 5, 10, min(240, self._alpha)))
+        # ── Background ──
+        p.fillRect(self.rect(), QColor(3, 5, 8, min(252, a)))
 
-        # Title
-        p.setFont(QFont("Segoe UI", 26, QFont.Weight.Light))
-        p.setPen(QColor(0, 175, 215, self._alpha))
+        # ── Pulsing concentric rings at 28% height ──
+        ry = h * 0.28
+        for i, ring_r in enumerate([46, 68, 90]):
+            pulse = math.sin(self._phase + i * 0.95) * 0.5 + 0.5
+            ra    = int((28 + 88 * pulse) * a / 255)
+            lw    = 1.5 - i * 0.18
+            p.setPen(QPen(QColor(0, 175, 215, ra), lw))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(QRectF(cx - ring_r, ry - ring_r, ring_r * 2, ring_r * 2))
+
+        # ── Pulsing center dot ──
+        cp = math.sin(self._phase * 2.1) * 0.5 + 0.5
+        ca = int((150 + 105 * cp) * a / 255)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(QColor(0, 175, 215, ca)))
+        p.drawEllipse(QRectF(cx - 4, ry - 4, 8, 8))
+
+        # ── Title ──
+        ty = h * 0.46
+        p.setFont(QFont("Segoe UI", 30, QFont.Weight.Thin))
+        p.setPen(QColor(0, 175, 215, a))
         p.drawText(
-            QRectF(0, h * 0.20, w, 56),
+            QRectF(0, ty, w, 54),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            "J.A.R.V.I.S."
-        )
-        p.setFont(QFont("Consolas", 9))
-        p.setPen(QColor(22, 36, 48, self._alpha))
-        p.drawText(
-            QRectF(0, h * 0.20 + 46, w, 20),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            "JUST A RATHER VERY INTELLIGENT SYSTEM"
+            "J.A.R.V.I.S.",
         )
 
-        # Boot lines
+        # ── Subtitle ──
+        p.setFont(QFont("Consolas", 8))
+        p.setPen(QColor(26, 50, 60, a))
+        p.drawText(
+            QRectF(0, ty + 52, w, 18),
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+            "JUST A RATHER VERY INTELLIGENT SYSTEM",
+        )
+
+        # ── Boot diagnostic lines ──
         p.setFont(QFont("Consolas", 10))
-        sy, lh = h * 0.42, 21
-        for i, line in enumerate(self._lines[-8:]):
-            last  = i == len(self._lines[-8:]) - 1
-            color = QColor(0, 175, 215, self._alpha) if last else QColor(30, 90, 70, self._alpha)
-            p.setPen(color)
+        ly, lh = h * 0.66, 20
+        shown  = self._lines[-6:]
+        for i, line in enumerate(shown):
+            last   = (i == len(shown) - 1)
+            color  = QColor(0, 175, 215, a) if last else QColor(28, 75, 55, a)
             prefix = "▸  " if last else "✓  "
+            p.setPen(color)
             p.drawText(
-                QRectF(w * 0.20, sy + i * lh, w * 0.60, lh),
+                QRectF(w * 0.14, ly + i * lh, w * 0.72, lh),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                prefix + line
+                prefix + line,
             )
 
-        # Progress bar
-        by, bw_full = h * 0.76, w * 0.50
-        bx  = (w - bw_full) / 2
+        # ── Progress bar ──
+        py = h * 0.87
+        bw = w * 0.46
+        bx = (w - bw) / 2.0
         prog = min(1.0, len(self._lines) / 6.0)
-        p.setPen(QPen(QColor(0, 175, 215, self._alpha // 3), 1))
+
+        p.setPen(QPen(QColor(0, 175, 215, int(a * 0.15)), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(bx, by, bw_full, 2), 1, 1)
+        p.drawRoundedRect(QRectF(bx, py, bw, 2), 1, 1)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(QColor(0, 175, 215, self._alpha)))
-        p.drawRoundedRect(QRectF(bx, by, bw_full * prog, 2), 1, 1)
+        p.setBrush(QBrush(QColor(0, 175, 215, a)))
+        p.drawRoundedRect(QRectF(bx, py, bw * prog, 2), 1, 1)
 
         p.end()
 
@@ -317,71 +459,14 @@ class JarvisUI(QWidget):
         self.setStyleSheet(_STYLE)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(32, 24, 32, 24)
-        root.setSpacing(0)
+        root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(10)
 
-        # ── Header ──────────────────────────────────────────────────────────
-        hdr = QHBoxLayout()
-        hdr.setContentsMargins(0, 0, 0, 0)
-
-        name = QLabel("J.A.R.V.I.S.")
-        name.setStyleSheet(
-            "color: rgba(0,175,215,0.85); font-size: 13px; font-weight: 600;"
-            "letter-spacing: 5px; font-family: 'Consolas', monospace;"
-        )
-        self.status_label = QLabel("BOOT")
-        self.status_label.setStyleSheet(
-            f"color: {_STATE_HEX['BOOT']}; font-size: 9px; letter-spacing: 3px;"
-            "font-family: 'Consolas', monospace;"
-        )
-        hdr.addWidget(name)
-        hdr.addStretch()
-        hdr.addWidget(self.status_label)
-        root.addLayout(hdr)
-
-        root.addSpacing(8)
-
-        # ── Breathing orb ────────────────────────────────────────────────────
-        self.orb = BreathingOrbWidget()
-        root.addWidget(self.orb, stretch=3)
-
-        # ── State label ──────────────────────────────────────────────────────
-        self.state_lbl = QLabel("INITIALIZING")
-        self.state_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.state_lbl.setStyleSheet(
-            f"color: {_STATE_HEX['BOOT']}; font-size: 9px; letter-spacing: 4px;"
-            "font-family: 'Consolas', monospace; margin-top: 6px;"
-        )
-        root.addWidget(self.state_lbl)
-
-        root.addSpacing(10)
-
-        # ── Waveform ─────────────────────────────────────────────────────────
-        self.waveform = WaveformWidget()
-        root.addWidget(self.waveform)
-
-        root.addSpacing(18)
-
-        # ── Divider ──────────────────────────────────────────────────────────
-        div = QFrame()
-        div.setFrameShape(QFrame.Shape.HLine)
-        div.setStyleSheet("border: none; border-top: 1px solid rgba(0,175,215,0.06);")
-        root.addWidget(div)
-
-        root.addSpacing(14)
-
-        # ── Chat log ─────────────────────────────────────────────────────────
-        self.chat_log = QTextEdit()
-        self.chat_log.setObjectName("ChatLog")
-        self.chat_log.setReadOnly(True)
-        self.chat_log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.chat_log.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        root.addWidget(self.chat_log, stretch=4)
-
-        # ── Vision panel (optional) ──────────────────────────────────────────
+        self._build_header(root)
+        self._build_main_card(root)
         self._build_vision(root)
 
-        # ── Boot overlay ─────────────────────────────────────────────────────
+        # Boot overlay — raised above all children
         self._boot_overlay = BootOverlayWidget(self)
         self._boot_overlay.raise_()
         self._boot_overlay.setGeometry(self.rect())
@@ -389,20 +474,116 @@ class JarvisUI(QWidget):
 
         self._wire_backend()
 
+    # ── Background ────────────────────────────────────────────────────────────
+    def paintEvent(self, event):
+        w, h = self.width(), self.height()
+        p    = QPainter(self)
+
+        # Near-black base
+        p.fillRect(self.rect(), QColor(3, 5, 8))
+
+        # Subtle blue-ish radial glow at centre (adds depth behind glass cards)
+        glow = QRadialGradient(QPointF(w / 2.0, h / 2.0), max(w, h) * 0.58)
+        glow.setColorAt(0.0, QColor(0, 80, 140, 16))
+        glow.setColorAt(0.5, QColor(0, 40, 80,   7))
+        glow.setColorAt(1.0, QColor(0,  0,  0,   0))
+        p.fillRect(self.rect(), QBrush(glow))
+        p.end()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._boot_overlay.setGeometry(self.rect())
 
-    # ── Vision ───────────────────────────────────────────────────────────────
+    # ── Header glass pill ────────────────────────────────────────────────────
+    def _build_header(self, root: QVBoxLayout):
+        hdr = GlassCard(radius=12)
+        hdr.setFixedHeight(46)
+
+        lay = QHBoxLayout(hdr)
+        lay.setContentsMargins(18, 0, 18, 0)
+        lay.setSpacing(0)
+
+        name_lbl = QLabel("J.A.R.V.I.S.")
+        name_lbl.setStyleSheet(
+            "color: rgba(0,175,215,220); font-size: 12px; font-weight: 600;"
+            "letter-spacing: 5px; font-family: 'Consolas', monospace;"
+        )
+
+        self.status_label = QLabel("BOOT")
+        self.status_label.setStyleSheet(
+            f"color: {_STATE_HEX['BOOT']}; font-size: 9px; letter-spacing: 3px;"
+            "font-family: 'Consolas', monospace;"
+        )
+
+        lay.addWidget(name_lbl)
+        lay.addStretch()
+        lay.addWidget(self.status_label)
+        root.addWidget(hdr)
+
+    # ── Main glass card ──────────────────────────────────────────────────────
+    def _build_main_card(self, root: QVBoxLayout):
+        card = GlassCard(radius=20)
+
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(28, 22, 28, 22)
+        lay.setSpacing(0)
+
+        # Arc reactor — horizontally centered, fixed size
+        self.reactor = ArcReactorWidget()
+        self.reactor.setFixedSize(220, 220)
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(self.reactor)
+        row.addStretch()
+        lay.addLayout(row)
+
+        lay.addSpacing(12)
+
+        # State label
+        self.state_lbl = QLabel("INITIALIZING")
+        self.state_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.state_lbl.setStyleSheet(
+            f"color: {_STATE_HEX['BOOT']}; font-size: 9px; letter-spacing: 4px;"
+            "font-family: 'Consolas', monospace;"
+        )
+        lay.addWidget(self.state_lbl)
+
+        lay.addSpacing(8)
+
+        # Waveform
+        self.waveform = WaveformWidget()
+        lay.addWidget(self.waveform)
+
+        lay.addSpacing(18)
+
+        # Divider
+        div = QFrame()
+        div.setFrameShape(QFrame.Shape.HLine)
+        div.setStyleSheet("border: none; border-top: 1px solid rgba(0,175,215,35);")
+        lay.addWidget(div)
+
+        lay.addSpacing(12)
+
+        # Chat log
+        self.chat_log = QTextEdit()
+        self.chat_log.setObjectName("ChatLog")
+        self.chat_log.setReadOnly(True)
+        self.chat_log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.chat_log.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        lay.addWidget(self.chat_log, stretch=1)
+
+        root.addWidget(card, stretch=1)
+
+    # ── Vision panel (optional) ───────────────────────────────────────────────
     def _build_vision(self, root: QVBoxLayout):
         try:
-            on_request, vcfg    = build_vision_on_request()
+            on_request, vcfg        = build_vision_on_request()
             self._vision_on_request = on_request
             self.vision_panel       = VisionPanel(
                 on_request=on_request,
-                camera_index=vcfg.get("camera_index", 0)
+                camera_index=vcfg.get("camera_index", 0),
             )
-            root.addSpacing(12)
+            root.addSpacing(10)
             root.addWidget(self.vision_panel)
         except Exception:
             self.vision_panel = None
@@ -418,11 +599,12 @@ class JarvisUI(QWidget):
 
         def on_boot_line(line: str):
             QTimer.singleShot(0, lambda l=line: self._boot_overlay.add_line(l))
+
         self.jarvis.set_boot_line_callback(on_boot_line)
 
         def _maybe_dismiss(state: str):
             if state == "IDLE" and self._boot_overlay.isVisible():
-                QTimer.singleShot(1000, self._boot_overlay.start_fade)
+                QTimer.singleShot(1200, self._boot_overlay.start_fade)
 
         def ui_notifier(event: str):
             state_map = {
@@ -460,17 +642,19 @@ class JarvisUI(QWidget):
             except Exception as exc:
                 print(f"[gui] Vision attachment failed: {exc}")
 
-        threading.Thread(target=self.jarvis.run, daemon=True, name="jarvis-main").start()
+        threading.Thread(
+            target=self.jarvis.run, daemon=True, name="jarvis-main"
+        ).start()
 
     # ── State update ──────────────────────────────────────────────────────────
     def _set_state(self, state: str):
-        self.orb.set_state(state)
+        self.reactor.set_state(state)
         self.waveform.set_color(_STATE_COLORS.get(state, _STATE_COLORS["IDLE"]))
         hex_c = _STATE_HEX.get(state, _STATE_HEX["IDLE"])
         self.state_lbl.setText(state)
         self.state_lbl.setStyleSheet(
             f"color: {hex_c}; font-size: 9px; letter-spacing: 4px;"
-            "font-family: 'Consolas', monospace; margin-top: 6px;"
+            "font-family: 'Consolas', monospace;"
         )
         self.status_label.setText(state)
         self.status_label.setStyleSheet(
@@ -488,7 +672,7 @@ class JarvisUI(QWidget):
             f'<div style="margin-bottom:14px; text-align:{align};">'
             f'<span style="color:{color}; font-size:8px; letter-spacing:2px;'
             f' font-family:Consolas,monospace; font-weight:600;">{sender.upper()}</span>'
-            f'<span style="color:rgba(22,36,48,0.9); font-size:8px; margin-left:7px;'
+            f'<span style="color:rgba(26,50,60,0.9); font-size:8px; margin-left:7px;'
             f' font-family:Consolas,monospace;">{ts}</span><br>'
             f'<span style="color:{"#9ab8c8" if is_jarvis else "#88c8a0"};'
             f' font-size:13px; line-height:1.85; display:inline-block; margin-top:3px;">'
@@ -501,11 +685,21 @@ class JarvisUI(QWidget):
             self.chat_log.verticalScrollBar().setValue(
                 self.chat_log.verticalScrollBar().maximum()
             )
+
         QTimer.singleShot(0, _do)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    # Set dark palette to prevent white flash before the first paintEvent
+    pal = app.palette()
+    pal.setColor(QPalette.ColorRole.Window,     QColor(3, 5, 8))
+    pal.setColor(QPalette.ColorRole.Base,       QColor(3, 5, 8))
+    pal.setColor(QPalette.ColorRole.WindowText, QColor(176, 204, 216))
+    pal.setColor(QPalette.ColorRole.Text,       QColor(176, 204, 216))
+    app.setPalette(pal)
+
     window = JarvisUI()
     window.show()
     sys.exit(app.exec())

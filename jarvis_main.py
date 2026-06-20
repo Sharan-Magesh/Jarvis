@@ -156,15 +156,15 @@ def _app_quip(app_name: str) -> str | None:
 def _time_greeting() -> str:
     h = datetime.now().hour
     if h < 5:
-        return "Working at this hour again, Sir. At least one of us never sleeps. I'll file it under 'chronic'."
+        return "Late again, Sir. Some of us need sleep."
     elif h < 12:
-        return "Good morning, Sir. Another day, another opportunity to exceed my expectations — which, to be clear, are not high."
+        return "Good morning, Sir."
     elif h < 17:
-        return "Good afternoon, Sir. I trust the morning was productive. No need to answer that."
+        return "Good afternoon, Sir."
     elif h < 21:
-        return "Good evening, Sir. Shall we accomplish something, or is this purely social?"
+        return "Good evening, Sir."
     else:
-        return "Working late again, Sir. I've started keeping a tally. We're well into double digits."
+        return "Still at it, Sir. Noted."
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -563,26 +563,25 @@ class EnhancedJarvis:
 
         threading.Thread(target=_llm_warmup, daemon=True).start()
 
-        # Speak boot lines — each feeds the GUI boot overlay via boot_line_cb
+        # Display boot lines in the GUI overlay — no speaking during diagnostics
         for line, delay in _BOOT_LINES:
             if callable(self.boot_line_cb):
                 try:
                     self.boot_line_cb(line)
                 except Exception:
                     pass
-            self.speak(line)
             time.sleep(delay)
 
         # Wait for LLM (up to 30 seconds)
         llm_ready.wait(timeout=30)
 
+        # Single spoken greeting once boot is complete
         greeting = _time_greeting()
         if self.llm.is_available():
-            self.speak(f"{greeting} All neural functions confirmed online.")
+            self.speak(greeting)
         else:
             self.speak(
-                f"{greeting} Brain functions appear to be offline. "
-                "Ollama is not responding, Sir — kindly start it before expecting miracles."
+                f"{greeting} Ollama appears offline — start it before expecting miracles."
             )
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -637,18 +636,20 @@ class EnhancedJarvis:
             pass
 
         # ── Path 1: Porcupine (purpose-built, no internet, always-on) ────────
-        try:
-            from wake import listen_for_wake
-            print("Listening for wake word (Porcupine)…")
-            detected = listen_for_wake(timeout=4.0)
-            if detected:
-                print("[wake] Porcupine: wake word detected.")
-                return True
-            return False   # timed out cleanly; loop will retry
-        except Exception as exc:
-            # Model missing, key invalid, sounddevice error — fall through
-            if not getattr(self, "_porcupine_warned", False):
-                print(f"[wake] Porcupine unavailable ({exc}). Using Google STT fallback.")
+        # Skip entirely once we know Porcupine is broken — no spam, no retries.
+        if not getattr(self, "_porcupine_warned", False):
+            try:
+                from wake import listen_for_wake
+                print("Listening for wake word (Porcupine)…")
+                detected = listen_for_wake(timeout=4.0)
+                if detected:
+                    print("[wake] Porcupine: wake word detected.")
+                    return True
+                return False   # timed out cleanly; loop will retry
+            except Exception as exc:
+                # Key invalid, model missing, sounddevice error — fall through once
+                print(f"[wake] Porcupine unavailable: {exc}")
+                print("[wake] Switching permanently to Google STT fallback.")
                 self._porcupine_warned = True
 
         # ── Path 2: Google STT fallback ───────────────────────────────────────

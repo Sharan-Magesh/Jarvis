@@ -48,28 +48,40 @@ DEVICE_INDEX = int(os.environ.get("MIC_INDEX", "2"))
 # ────────────────────────────────────────────────────────────────────────────────
 
 # Module-level handle — created lazily so import never crashes
-_porcupine = None
+_porcupine   = None
+_init_failed = False   # stays True after first failure; skips all future retries
 
 
 def _get_porcupine():
-    """Return (and cache) the Porcupine instance, raising on failure."""
-    global _porcupine
+    """
+    Return (and cache) the Porcupine instance, raising on any failure.
+    After the first failure _init_failed is set so subsequent calls raise
+    immediately (a cheap RuntimeError) without hitting the Picovoice SDK again.
+    """
+    global _porcupine, _init_failed
+    if _init_failed:
+        raise RuntimeError("Porcupine previously failed to initialize.")
     if _porcupine is None:
         if not ACCESS_KEY:
+            _init_failed = True
             raise RuntimeError(
-                "PICOVOICE_ACCESS_KEY is not set. Add it to a .env file in the "
-                "project root (see .env.example) or set the environment variable."
+                "PICOVOICE_ACCESS_KEY is not set. Add it to the .env file."
             )
         if not os.path.isfile(MODEL_PATH):
+            _init_failed = True
             raise FileNotFoundError(
                 f"Porcupine model not found: {MODEL_PATH}\n"
                 "Set PORCUPINE_MODEL_PATH env var to fix this."
             )
-        _porcupine = pvporcupine.create(
-            access_key=ACCESS_KEY,
-            keyword_paths=[MODEL_PATH],
-            sensitivities=[SENSITIVITY],
-        )
+        try:
+            _porcupine = pvporcupine.create(
+                access_key=ACCESS_KEY,
+                keyword_paths=[MODEL_PATH],
+                sensitivities=[SENSITIVITY],
+            )
+        except Exception:
+            _init_failed = True
+            raise   # propagate — caller decides whether to fall back
     return _porcupine
 
 
@@ -89,12 +101,12 @@ def listen_for_wake(timeout: float | None = None) -> bool:
     Returns:
         True  — wake word heard
         False — timed out without detection
+
+    Raises:
+        Any exception from _get_porcupine() (key error, model missing, etc.)
+        so that the caller can decide to fall back gracefully.
     """
-    try:
-        porc = _get_porcupine()
-    except Exception as exc:
-        print(f"[wake] Porcupine init failed: {exc}")
-        return False
+    porc = _get_porcupine()   # raises on failure — do NOT catch here
 
     print("Listening for wake word…")
     elapsed = 0.0
