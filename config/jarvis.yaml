@@ -13,11 +13,11 @@ llm:
   url: "http://localhost:11434"
   model: "llama3.2:3b"             # llama3.2:3b — fastest at 3B, 128K ctx
   timeout: 120                     # seconds
-  history_limit: 12                # conversation turns sent as context
+  history_limit: 6                 # fewer turns = smaller prompt = faster generation
   temperature: 0.2                  # lower = fewer hallucinations
   top_p: 0.80                       # tighter nucleus sampling
-  num_ctx: 2048
-  num_predict: 80
+  num_ctx: 1024                    # half context = noticeably faster first token
+  num_predict: 60                  # JARVIS answers short anyway
   repeat_penalty: 1.15              # penalise looping / padding
 
 # ── Vision / VLM ─────────────────────────────────────────────────────────────
@@ -38,15 +38,15 @@ stt:
   language: "en-IN"
   sample_rate: 16000
   energy_threshold: 250
-  pause_threshold: 1.6
-  non_speaking_duration: 0.8
+  pause_threshold: 0.8             # seconds of silence before STT sends audio
+  non_speaking_duration: 0.4       # ambient buffer at audio start
   mic_name: null                   # null = system default; set partial name to auto-select
 
 # ── Wake Word ─────────────────────────────────────────────────────────────────
 wake:
   keyword: "jarvis"
   sensitivity: 0.5                 # 0.0–1.0 (higher = more sensitive, more false positives)
-  post_tts_cooldown: 2.5           # seconds to wait after speaking before listening
+  post_tts_cooldown: 1.2           # seconds to wait after speaking before listening
 
 # ── Conversation ──────────────────────────────────────────────────────────────
 conversation:

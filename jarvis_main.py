@@ -434,6 +434,15 @@ class EnhancedJarvis:
             self.recognizer.energy_threshold = int(_cfg("stt", "energy_threshold", 250))
         print("Microphone calibrated!")
 
+        # ── pygame: init once here, never per-utterance ───────────────────────
+        try:
+            import pygame
+            pygame.mixer.init()
+            self._pygame_ready = True
+        except Exception as _pg_exc:
+            print(f"[tts] pygame pre-init failed: {_pg_exc}")
+            self._pygame_ready = False
+
         # ── Speaker thread ────────────────────────────────────────────────────
         self.speak_queue = Queue()
         self._start_speaker_thread()
@@ -485,7 +494,7 @@ class EnhancedJarvis:
                 self.last_tts_ended = time.time()
                 self.is_speaking    = False
                 self.last_activity  = time.time()
-                time.sleep(0.8)
+                time.sleep(0.1)
 
         threading.Thread(
             target=speaker_loop, daemon=True, name="jarvis-speaker"
@@ -502,19 +511,23 @@ class EnhancedJarvis:
         try:
             communicator = Communicate(text=text, voice=self.tts_voice)
             await communicator.save(filename)
-            try:
-                import pygame
-                pygame.mixer.init()
-                pygame.mixer.music.load(filename)
-                pygame.mixer.music.play()
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.05)
-                pygame.mixer.music.stop()
-                pygame.mixer.quit()
-                return True
-            except Exception as pg_exc:
-                print(f"[tts] pygame playback failed: {pg_exc}")
-                return False
+            if self._pygame_ready:
+                try:
+                    import pygame
+                    pygame.mixer.music.load(filename)
+                    pygame.mixer.music.play()
+                    while pygame.mixer.music.get_busy():
+                        time.sleep(0.05)
+                    pygame.mixer.music.stop()
+                    try:
+                        pygame.mixer.music.unload()
+                    except Exception:
+                        pass
+                    return True
+                except Exception as pg_exc:
+                    print(f"[tts] pygame playback failed: {pg_exc}")
+                    return False
+            return False
         except Exception as exc:
             print(f"[tts] Edge TTS failed: {exc}")
             return False
