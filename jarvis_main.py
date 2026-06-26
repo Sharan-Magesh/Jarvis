@@ -913,9 +913,12 @@ class EnhancedJarvis:
                 self.speak("Couldn't capture the screen, Sir.")
                 return
             prompt = (
-                "Extract ALL visible text from this screenshot, preserving layout."
+                "Extract ALL visible text from this screenshot exactly as it "
+                "appears. Only output text you can literally see in the image."
                 if kind == "screen_ocr" else
-                "Summarize what is on the screen in 2–3 sentences."
+                "Describe only what you can literally see in this screenshot — "
+                "which applications, windows, or content are visible. "
+                "Do not guess or infer anything not shown in the image."
             )
             self.speak(_wit_thinking())
             result = self._vlm_call(shot, prompt)
@@ -928,9 +931,12 @@ class EnhancedJarvis:
                 self.speak("Camera access failed, Sir. Check permissions.")
                 return
             prompt = (
-                "Describe what you see in detail."
+                "Look at this image and describe only what you can actually see: "
+                "people, objects, background, lighting, colors. "
+                "Do not guess or assume anything not visible in the image."
                 if kind == "cam_describe" else
-                "List all distinct objects visible in this image."
+                "List only the distinct objects you can clearly see in this image. "
+                "Do not guess what might be present — only what is visible."
             )
             self.speak(_wit_thinking())
             result = self._vlm_call(frame, prompt)
