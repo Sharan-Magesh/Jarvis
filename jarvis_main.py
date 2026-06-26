@@ -884,8 +884,14 @@ class EnhancedJarvis:
         if not cap.isOpened():
             return None
         try:
-            ret, frame = cap.read()
-            return frame if ret else None
+            # Discard the first few frames — many cameras output dark/blank frames
+            # immediately after open before the sensor has adjusted.
+            frame = None
+            for _ in range(5):
+                ret, f = cap.read()
+                if ret:
+                    frame = f
+            return frame
         finally:
             cap.release()
 
