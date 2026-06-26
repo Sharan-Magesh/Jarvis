@@ -340,13 +340,23 @@ class MemoryStore:
 class EnhancedJarvis:
     _VISION_MAP = {
         "cam_describe": [
-            "what do you see", "describe", "what's on my camera",
-            "what is on my camera", "what do you see in front",
+            "what do you see", "what can you see", "what could you see",
+            "describe", "what's on my camera", "what is on my camera",
+            "what do you see in front", "what can you see in",
+            "what's the camera", "camera showing", "camera show",
+            "what am i doing", "what do i look like", "look at the camera",
+            "look through the camera", "through the camera",
         ],
         "cam_detect":  ["detect", "find objects", "what objects"],
         "screen_ocr":  ["ocr", "read the screen", "read this", "extract text"],
-        "screen_desc": ["what's on my screen", "what is on the screen",
-                        "describe the screen"],
+        "screen_desc": [
+            "what's on my screen", "what is on the screen",
+            "describe the screen", "what's on the screen",
+            "what can you see on screen", "what do you see on screen",
+            "what can you see on the screen", "what is on screen",
+            "screen showing", "what's showing", "look at the screen",
+            "look at my screen",
+        ],
         "cam_on":      ["start camera", "turn on camera", "camera on"],
         "cam_off":     ["stop camera", "turn off camera", "camera off"],
     }
