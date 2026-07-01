@@ -1291,6 +1291,35 @@ class EnhancedJarvis:
             self._handle_vision_kind(vk)
             return
 
+        # ── Time ─────────────────────────────────────────────────────────────
+        if any(p in lower for p in self._TIME_PHRASES):
+            self.speak(f"The time is {get_time()}, Sir.")
+            return
+
+        # ── Date ─────────────────────────────────────────────────────────────
+        if any(p in lower for p in self._DATE_PHRASES):
+            self.speak(f"Today is {get_date()}, Sir.")
+            return
+
+        # ── Weather ───────────────────────────────────────────────────────────
+        if any(p in lower for p in self._WEATHER_PHRASES):
+            city = self._extract_weather_city(lower)
+            if not city:
+                self.speak("Which city did you have in mind, Sir?")
+                return
+            self.speak(_wit_thinking())
+            def _weather_worker(c=city):
+                self._inc_pending()
+                try:
+                    w = get_weather(c)
+                    self.speak(format_weather(w))
+                except Exception as exc:
+                    self.speak(f"Couldn't retrieve weather data, Sir. {exc}")
+                finally:
+                    self._dec_pending()
+            threading.Thread(target=_weather_worker, daemon=True).start()
+            return
+
         # ── App / file / folder ───────────────────────────────────────────────
         app_m    = re.match(r"^\s*open\s+(app|application|program|game)\s+(.+)$", lower)
         file_m   = re.match(r"^\s*open\s+(file|document|doc)\s+(.+)$", lower)
