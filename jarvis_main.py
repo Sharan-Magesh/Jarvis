@@ -36,6 +36,7 @@ except ImportError:
 from edge_tts import Communicate
 from llm import LocalLLM
 from power_actions import system_action
+from realtime import get_time, get_date, get_weather, format_weather
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG LOADER
@@ -360,6 +361,26 @@ class EnhancedJarvis:
         "cam_on":      ["start camera", "turn on camera", "camera on"],
         "cam_off":     ["stop camera", "turn off camera", "camera off"],
     }
+
+    _TIME_PHRASES = [
+        "what time is it", "what's the time", "what is the time",
+        "current time", "tell me the time", "time please", "time now",
+        "what time", "the time",
+    ]
+    _DATE_PHRASES = [
+        "what's the date", "what is the date", "what day is it",
+        "today's date", "what date is it", "current date",
+        "what day is today", "what's today", "today's day",
+    ]
+    _WEATHER_PHRASES = [
+        "what's the weather", "what is the weather", "how's the weather",
+        "weather today", "weather forecast", "is it going to rain",
+        "what's the temperature", "what is the temperature",
+        "temperature today", "weather in", "weather for",
+        "temperature in", "how hot is it", "how cold is it",
+        "will it rain", "should i carry an umbrella",
+        "what's it like outside", "how's it outside",
+    ]
 
     def __init__(self, greet_on_start: bool = True):
         # ── Recognizer ───────────────────────────────────────────────────────
@@ -959,6 +980,29 @@ class EnhancedJarvis:
                 if p in t:
                     return kind
         return None
+
+    def _extract_weather_city(self, text: str) -> str:
+        """
+        Pull a city name out of a weather query.
+        Handles: 'weather in Chennai', 'temperature in New York',
+                 'how's the weather in Paris', 'weather Chennai'
+        Returns empty string if no city found.
+        """
+        t = text.strip().lower()
+        # "weather in X" / "temperature in X" / "forecast for X"
+        m = re.search(
+            r"\b(?:weather|temperature|forecast|like|rain|hot|cold)\s+(?:in|at|for)\s+(.+)$",
+            t, re.I
+        )
+        if m:
+            return m.group(1).strip().title()
+        # "weather X" with no preposition (e.g. "weather chennai")
+        m = re.search(r"\bweather\s+([a-z][\w\s]{1,30})$", t, re.I)
+        if m:
+            candidate = m.group(1).strip()
+            if candidate not in {"today", "now", "outside", "forecast", "please"}:
+                return candidate.title()
+        return ""
 
     # ─────────────────────────────────────────────────────────────────────────
     # APP LAUNCHER
